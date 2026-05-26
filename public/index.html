@@ -6,534 +6,500 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0a1420">
-  <title>Claude Phone</title>
+  <title>Claude Network</title>
   <link rel="manifest" href="manifest.json">
-
-  <!-- xterm.js -->
   <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Socket.IO from CDN so we can connect to any node -->
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:       #050708;
-      --surface:  #0a1018;
-      --border:   #0e1c2a;
-      --accent:   #1a6080;
-      --accent2:  #2a90b0;
-      --text:     #7ab8d0;
-      --muted:    #2a4858;
-      --green:    #00c060;
-      --red:      #cc2030;
-      --yellow:   #c8a000;
-      --safe:     env(safe-area-inset-bottom, 0px);
+      --bg:      #050708;
+      --surf:    #080e16;
+      --surf2:   #0a1220;
+      --border:  #0e1c2a;
+      --accent:  #1a6080;
+      --hi:      #2a90b0;
+      --text:    #7ab8d0;
+      --muted:   #2a4858;
+      --green:   #00c060;
+      --red:     #cc2030;
+      --yellow:  #c8a000;
+      --safe:    env(safe-area-inset-bottom, 0px);
     }
+    html,body { height:100%; width:100%; background:var(--bg); color:var(--text); font-family:'Courier New',monospace; overflow:hidden; -webkit-tap-highlight-color:transparent; }
 
-    html, body {
-      height: 100%; width: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Courier New', monospace;
-      overflow: hidden;
-      -webkit-tap-highlight-color: transparent;
-    }
+    /* ── Layout ── */
+    #app { display:flex; flex-direction:column; height:100dvh; height:100vh; }
 
-    /* ── Layout ─────────────────────────────────── */
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100dvh;
-      height: 100vh;
-    }
-
-    /* ── Header ─────────────────────────────────── */
+    /* ── Header ── */
     #header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      min-height: 44px;
-      flex-shrink: 0;
+      display:flex; align-items:center; gap:6px;
+      padding:6px 10px; background:var(--surf);
+      border-bottom:1px solid var(--border); min-height:44px; flex-shrink:0;
     }
-
-    #status-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--muted);
-      flex-shrink: 0;
-      transition: background 0.3s;
+    #status-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0; transition:background .3s; }
+    #status-dot.on  { background:var(--green); box-shadow:0 0 6px var(--green); }
+    #status-dot.err { background:var(--red); }
+    #node-label {
+      font-size:9px; color:var(--hi); letter-spacing:.12em;
+      flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
-    #status-dot.on  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    #status-dot.err { background: var(--red); }
-
-    #session-name {
-      font-size: 11px;
-      color: var(--text);
-      letter-spacing: 0.1em;
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
+    #session-label { font-size:9px; color:var(--muted); letter-spacing:.08em; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .hbtn {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 10px;
-      font-family: inherit;
-      padding: 4px 8px;
-      cursor: pointer;
-      letter-spacing: 0.08em;
-      border-radius: 3px;
-      white-space: nowrap;
-      transition: color 0.2s, border-color 0.2s;
+      background:none; border:1px solid var(--border); color:var(--muted);
+      font-size:9px; font-family:inherit; padding:4px 7px; cursor:pointer;
+      letter-spacing:.08em; border-radius:3px; white-space:nowrap; flex-shrink:0;
     }
-    .hbtn:active { color: var(--text); border-color: var(--accent); }
+    .hbtn:active { color:var(--text); border-color:var(--accent); }
+    .hbtn.accent { border-color:var(--accent); color:var(--hi); }
 
-    /* ── Terminal ───────────────────────────────── */
-    #terminal-wrap {
-      flex: 1;
-      overflow: hidden;
-      position: relative;
-    }
+    /* ── Terminal ── */
+    #terminal-wrap { flex:1; overflow:hidden; position:relative; }
+    #terminal { width:100%; height:100%; }
+    .xterm { height:100%; }
+    .xterm-viewport { overflow-y:hidden !important; }
 
-    #terminal {
-      width: 100%;
-      height: 100%;
-    }
-
-    .xterm { height: 100%; }
-    .xterm-viewport { overflow-y: hidden !important; }
-
-    /* ── Quick command bar ──────────────────────── */
-    #quick-bar {
-      display: flex;
-      gap: 6px;
-      padding: 6px 8px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      overflow-x: auto;
-      flex-shrink: 0;
-      scrollbar-width: none;
-    }
-    #quick-bar::-webkit-scrollbar { display: none; }
-
-    .qbtn {
-      flex-shrink: 0;
-      background: #080e16;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: inherit;
-      font-size: 10px;
-      padding: 6px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      letter-spacing: 0.06em;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-      white-space: nowrap;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    .qbtn:active { background: #0d1820; color: var(--text); border-color: var(--accent); }
-    .qbtn.yes    { border-color: #1a4020; color: #2a7040; }
-    .qbtn.yes:active { background: #0a1810; color: var(--green); border-color: var(--green); }
-    .qbtn.no     { border-color: #3a1018; color: #702030; }
-    .qbtn.no:active  { background: #180810; color: var(--red); border-color: var(--red); }
-
-    /* ── Control bar ────────────────────────────── */
-    #ctrl-bar {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 5px;
-      padding: 6px 8px;
-      padding-bottom: max(6px, var(--safe));
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    .cbtn {
-      background: #080d14;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: inherit;
-      font-size: 13px;
-      padding: 10px 4px;
-      border-radius: 4px;
-      cursor: pointer;
-      text-align: center;
-      user-select: none;
-      -webkit-user-select: none;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .cbtn:active { color: var(--accent2); border-color: var(--accent); background: #0d1820; }
-    .cbtn.enter  { background: #061218; border-color: #1a4858; color: var(--accent); }
-    .cbtn.enter:active { background: #0d2030; color: #6ad8f0; border-color: var(--accent2); }
-
-    /* ── Sessions panel ─────────────────────────── */
-    #sessions-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 4, 8, 0.92);
-      z-index: 100;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-end;
-    }
-    #sessions-overlay.open { display: flex; }
-
-    #sessions-panel {
-      width: 100%;
-      max-width: 480px;
-      background: #080e16;
-      border-top: 1px solid var(--border);
-      border-radius: 14px 14px 0 0;
-      padding: 16px;
-      padding-bottom: max(20px, var(--safe));
-      max-height: 70vh;
-      overflow-y: auto;
-    }
-
-    #sessions-panel h2 {
-      font-size: 10px;
-      letter-spacing: 0.3em;
-      color: var(--muted);
-      margin-bottom: 14px;
-      text-align: center;
-    }
-
-    .session-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      margin-bottom: 8px;
-      cursor: pointer;
-      transition: border-color 0.2s;
-    }
-    .session-item.active { border-color: var(--accent); }
-    .session-item:active  { border-color: var(--accent2); }
-
-    .session-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
-    .session-name { flex: 1; font-size: 12px; color: var(--text); }
-    .session-cwd  { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
-    .session-kill { background: none; border: 1px solid #3a1018; color: #702030; font-size: 10px; font-family: inherit; padding: 3px 7px; border-radius: 3px; cursor: pointer; }
-    .session-kill:active { color: var(--red); border-color: var(--red); }
-
-    #new-session-form {
-      display: flex;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    #new-session-name {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: inherit;
-      font-size: 11px;
-      padding: 8px 10px;
-      border-radius: 4px;
-      outline: none;
-    }
-    #new-session-name:focus { border-color: var(--accent); }
-
-    #new-session-btn {
-      background: #061218;
-      border: 1px solid var(--accent);
-      color: var(--accent2);
-      font-family: inherit;
-      font-size: 10px;
-      padding: 8px 14px;
-      border-radius: 4px;
-      cursor: pointer;
-      letter-spacing: 0.1em;
-    }
-    #new-session-btn:active { background: #0d2030; }
-
-    #close-sessions {
-      display: block;
-      width: 100%;
-      margin-top: 10px;
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: inherit;
-      font-size: 10px;
-      padding: 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      letter-spacing: 0.1em;
-    }
-
-    /* ── No session state ───────────────────────── */
     #no-session {
-      display: none;
-      position: absolute;
-      inset: 0;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 16px;
-      background: var(--bg);
+      display:none; position:absolute; inset:0;
+      align-items:center; justify-content:center; flex-direction:column; gap:16px;
+      background:var(--bg);
     }
-    #no-session.show { display: flex; }
-    #no-session p { font-size: 10px; color: var(--muted); letter-spacing: 0.2em; }
+    #no-session.show { display:flex; }
+    #no-session p { font-size:10px; color:var(--muted); letter-spacing:.2em; }
     #no-session button {
-      background: #061218;
-      border: 1px solid var(--accent);
-      color: var(--accent2);
-      font-family: inherit;
-      font-size: 11px;
-      padding: 12px 24px;
-      border-radius: 4px;
-      cursor: pointer;
-      letter-spacing: 0.1em;
+      background:#061218; border:1px solid var(--accent); color:var(--hi);
+      font-family:inherit; font-size:11px; padding:12px 24px;
+      border-radius:4px; cursor:pointer; letter-spacing:.1em;
+    }
+
+    /* ── Quick bar ── */
+    #quick-bar {
+      display:flex; gap:5px; padding:5px 8px;
+      background:var(--surf); border-top:1px solid var(--border);
+      overflow-x:auto; flex-shrink:0; scrollbar-width:none;
+    }
+    #quick-bar::-webkit-scrollbar { display:none; }
+    .qbtn {
+      flex-shrink:0; background:#080e16; border:1px solid var(--border); color:var(--muted);
+      font-family:inherit; font-size:10px; padding:6px 10px; border-radius:4px;
+      cursor:pointer; letter-spacing:.06em; white-space:nowrap; user-select:none; -webkit-user-select:none;
+    }
+    .qbtn:active { background:#0d1820; color:var(--text); border-color:var(--accent); }
+    .qbtn.yes { border-color:#1a4020; color:#2a7040; }
+    .qbtn.yes:active { background:#0a1810; color:var(--green); border-color:var(--green); }
+    .qbtn.no  { border-color:#3a1018; color:#702030; }
+    .qbtn.no:active  { background:#180810; color:var(--red); border-color:var(--red); }
+
+    /* ── Control bar ── */
+    #ctrl-bar {
+      display:grid; grid-template-columns:repeat(7,1fr); gap:5px;
+      padding:6px 8px; padding-bottom:max(6px,var(--safe));
+      background:var(--surf); border-top:1px solid var(--border); flex-shrink:0;
+    }
+    .cbtn {
+      background:#080d14; border:1px solid var(--border); color:var(--muted);
+      font-family:inherit; font-size:13px; padding:10px 4px; border-radius:4px;
+      cursor:pointer; text-align:center; user-select:none; -webkit-user-select:none;
+    }
+    .cbtn:active { color:var(--hi); border-color:var(--accent); background:#0d1820; }
+    .cbtn.enter  { background:#061218; border-color:#1a4858; color:var(--accent); }
+    .cbtn.enter:active { background:#0d2030; color:#6ad8f0; border-color:var(--hi); }
+
+    /* ── Overlay base ── */
+    .overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(2,4,8,.92); z-index:100;
+      flex-direction:column; align-items:center; justify-content:flex-end;
+    }
+    .overlay.open { display:flex; }
+    .panel {
+      width:100%; max-width:480px; background:#080e16;
+      border-top:1px solid var(--border); border-radius:14px 14px 0 0;
+      padding:16px; padding-bottom:max(20px,var(--safe)); max-height:78vh; overflow-y:auto;
+    }
+    .panel h2 { font-size:10px; letter-spacing:.3em; color:var(--muted); margin-bottom:14px; text-align:center; }
+
+    /* ── Node items ── */
+    .node-item {
+      display:flex; align-items:center; gap:8px; padding:10px 12px;
+      border:1px solid var(--border); border-radius:6px; margin-bottom:8px; cursor:pointer;
+    }
+    .node-item.active { border-color:var(--hi); }
+    .node-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+    .node-dot.on { background:var(--green); box-shadow:0 0 5px var(--green); }
+    .node-info { flex:1; }
+    .node-name { font-size:11px; color:var(--text); }
+    .node-url  { font-size:9px; color:var(--muted); }
+    .node-connect { background:#061218; border:1px solid var(--accent); color:var(--hi); font-size:9px; font-family:inherit; padding:4px 10px; border-radius:3px; cursor:pointer; }
+    .node-del { background:none; border:1px solid #3a1018; color:#702030; font-size:10px; font-family:inherit; padding:3px 7px; border-radius:3px; cursor:pointer; }
+
+    /* ── Add node form ── */
+    .add-form { display:flex; flex-direction:column; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+    .add-form label { font-size:9px; color:var(--muted); letter-spacing:.15em; }
+    .fi {
+      background:var(--bg); border:1px solid var(--border); color:var(--text);
+      font-family:inherit; font-size:11px; padding:8px 10px; border-radius:4px; outline:none; width:100%;
+    }
+    .fi:focus { border-color:var(--accent); }
+    .add-form button {
+      background:#061218; border:1px solid var(--accent); color:var(--hi);
+      font-family:inherit; font-size:10px; padding:9px; border-radius:4px; cursor:pointer; letter-spacing:.1em;
+    }
+
+    /* ── Session items ── */
+    .session-item {
+      display:flex; align-items:center; gap:8px; padding:10px 12px;
+      border:1px solid var(--border); border-radius:6px; margin-bottom:8px; cursor:pointer;
+    }
+    .session-item.active { border-color:var(--accent); }
+    .sdot { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
+    .sname { flex:1; font-size:12px; color:var(--text); }
+    .scwd  { font-size:9px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:110px; }
+    .skill { background:none; border:1px solid #3a1018; color:#702030; font-size:10px; font-family:inherit; padding:3px 7px; border-radius:3px; cursor:pointer; }
+
+    .new-sess-row { display:flex; gap:8px; margin-top:12px; }
+    .new-sess-row input { flex:1; }
+    .new-sess-row button {
+      background:#061218; border:1px solid var(--accent); color:var(--hi);
+      font-family:inherit; font-size:10px; padding:8px 12px; border-radius:4px; cursor:pointer;
+    }
+    .close-btn {
+      display:block; width:100%; margin-top:10px; background:none;
+      border:1px solid var(--border); color:var(--muted); font-family:inherit;
+      font-size:10px; padding:8px; border-radius:4px; cursor:pointer; letter-spacing:.1em;
     }
   </style>
 </head>
 <body>
 <div id="app">
 
-  <!-- Header -->
   <div id="header">
     <div id="status-dot"></div>
-    <span id="session-name">NO SESSION</span>
-    <button class="hbtn" id="btn-sessions">SESSIONS</button>
-    <button class="hbtn" id="btn-new">+ NEW</button>
+    <span id="node-label">NO NODE</span>
+    <span style="color:#1a3040;font-size:10px">›</span>
+    <span id="session-label">NO SESSION</span>
+    <button class="hbtn accent" id="btn-nodes">NODES</button>
+    <button class="hbtn" id="btn-sessions">SESS</button>
+    <button class="hbtn" id="btn-new">+</button>
   </div>
 
-  <!-- Terminal -->
   <div id="terminal-wrap">
     <div id="terminal"></div>
     <div id="no-session" class="show">
-      <p>NO ACTIVE SESSION</p>
-      <button id="btn-start-first">START CLAUDE</button>
+      <p>SELECT A NODE TO BEGIN</p>
+      <button id="btn-open-nodes">OPEN NODES</button>
     </div>
   </div>
 
-  <!-- Quick command bar -->
   <div id="quick-bar">
     <button class="qbtn yes" data-send="y\r">✓ YES</button>
     <button class="qbtn no"  data-send="n\r">✗ NO</button>
-    <button class="qbtn"     data-send="">■ STOP</button>
+    <button class="qbtn"     data-ctrl="c">■ STOP</button>
     <button class="qbtn"     data-send="/clear\r">/clear</button>
     <button class="qbtn"     data-send="/compact\r">/compact</button>
     <button class="qbtn"     data-send="/help\r">/help</button>
     <button class="qbtn"     data-send="/status\r">/status</button>
-    <button class="qbtn"     data-send="\t">TAB</button>
-    <button class="qbtn"     data-send="">ESC</button>
+    <button class="qbtn"     data-ctrl="tab">TAB</button>
+    <button class="qbtn"     data-ctrl="esc">ESC</button>
   </div>
 
-  <!-- Control bar -->
   <div id="ctrl-bar">
-    <button class="cbtn" data-send="[A">↑</button>
-    <button class="cbtn" data-send="[B">↓</button>
-    <button class="cbtn" data-send="[D">←</button>
-    <button class="cbtn" data-send="[C">→</button>
-    <button class="cbtn" data-send="">^C</button>
-    <button class="cbtn" data-send="">^D</button>
+    <button class="cbtn" data-esc="up">↑</button>
+    <button class="cbtn" data-esc="down">↓</button>
+    <button class="cbtn" data-esc="left">←</button>
+    <button class="cbtn" data-esc="right">→</button>
+    <button class="cbtn" data-ctrl="c">^C</button>
+    <button class="cbtn" data-ctrl="d">^D</button>
     <button class="cbtn enter" data-send="\r">↵</button>
   </div>
+</div>
 
+<!-- Nodes overlay -->
+<div id="nodes-overlay" class="overlay">
+  <div class="panel">
+    <h2>— NETWORK NODES —</h2>
+    <div id="node-list"></div>
+    <div class="add-form">
+      <label>ADD NODE</label>
+      <input class="fi" id="add-node-name" type="text" placeholder="Name (e.g. Pi 3)" autocomplete="off" spellcheck="false">
+      <input class="fi" id="add-node-url"  type="text" placeholder="URL (e.g. http://100.x.x.x:3000)" autocomplete="off" spellcheck="false">
+      <button id="add-node-btn">ADD NODE</button>
+    </div>
+    <button class="close-btn" id="close-nodes">CLOSE</button>
+  </div>
 </div>
 
 <!-- Sessions overlay -->
-<div id="sessions-overlay">
-  <div id="sessions-panel">
+<div id="sessions-overlay" class="overlay">
+  <div class="panel">
     <h2>— SESSIONS —</h2>
     <div id="session-list"></div>
-    <div id="new-session-form">
-      <input id="new-session-name" type="text" placeholder="session name (optional)" autocomplete="off" autocorrect="off" spellcheck="false">
-      <button id="new-session-btn">START</button>
+    <div class="new-sess-row">
+      <input class="fi" id="new-sess-name" type="text" placeholder="session name (optional)" autocomplete="off" spellcheck="false">
+      <button id="new-sess-btn">START</button>
     </div>
-    <button id="close-sessions">CLOSE</button>
+    <button class="close-btn" id="close-sessions">CLOSE</button>
   </div>
 </div>
 
 <script>
-const socket = io();
-
 // ── Terminal ──────────────────────────────────────────────────
 const term = new Terminal({
   theme: {
-    background:   "#050708",
-    foreground:   "#9ab8c8",
-    cursor:       "#4a98b8",
-    cursorAccent: "#050708",
-    black:        "#050708", brightBlack:   "#1a3040",
-    red:          "#cc2030", brightRed:     "#ff4050",
-    green:        "#00a050", brightGreen:   "#00d070",
-    yellow:       "#b08000", brightYellow:  "#d0a800",
-    blue:         "#1a6090", brightBlue:    "#4a90c8",
-    magenta:      "#703080", brightMagenta: "#9050b0",
-    cyan:         "#1a8090", brightCyan:    "#3ab0c0",
-    white:        "#6a8898", brightWhite:   "#9ab8c8",
+    background:'#050708', foreground:'#9ab8c8', cursor:'#4a98b8', cursorAccent:'#050708',
+    black:'#050708', brightBlack:'#1a3040',
+    red:'#cc2030',   brightRed:'#ff4050',
+    green:'#00a050', brightGreen:'#00d070',
+    yellow:'#b08000',brightYellow:'#d0a800',
+    blue:'#1a6090',  brightBlue:'#4a90c8',
+    magenta:'#703080',brightMagenta:'#9050b0',
+    cyan:'#1a8090',  brightCyan:'#3ab0c0',
+    white:'#6a8898', brightWhite:'#9ab8c8',
   },
-  fontFamily:  "'Courier New', 'Cascadia Code', monospace",
-  fontSize:    13,
-  lineHeight:  1.25,
-  cursorBlink: true,
-  cursorStyle: "block",
-  scrollback:  2000,
-  allowProposedApi: true,
+  fontFamily:"'Courier New','Cascadia Code',monospace",
+  fontSize:13, lineHeight:1.25, cursorBlink:true, cursorStyle:'block',
+  scrollback:2000, allowProposedApi:true,
 });
-
 const fitAddon = new FitAddon.FitAddon();
 term.loadAddon(fitAddon);
 term.loadAddon(new WebLinksAddon.WebLinksAddon());
-term.open(document.getElementById("terminal"));
+term.open(document.getElementById('terminal'));
 fitAddon.fit();
 
-// ── State ────────────────────────────────────────────────────
-let currentSession = null;
-let allSessions    = [];
+// ── State ─────────────────────────────────────────────────────
+let socket          = null;
+let currentNodeUrl  = null;
+let currentNodeName = null;
+let currentSession  = null;
+let allSessions     = [];
 
-// ── Socket events ────────────────────────────────────────────
-socket.on("connect",    () => setDot("on"));
-socket.on("disconnect", () => setDot("err"));
+// Nodes: [{ name, url }] — persisted in localStorage
+function loadNodes() {
+  try { return JSON.parse(localStorage.getItem('claude_nodes') || '[]'); } catch { return []; }
+}
+function saveNodes(nodes) { localStorage.setItem('claude_nodes', JSON.stringify(nodes)); }
 
-socket.on("sessions", list => {
-  allSessions = list;
-  renderSessions();
-  // Auto-join if we lost connection and session still exists
-  if (currentSession && list.find(s => s.id === currentSession)) {
-    socket.emit("join", currentSession);
-  }
-});
-
-socket.on("created", id => {
-  socket.emit("join", id);
-});
-
-socket.on("replay", ({ id, data }) => {
-  if (id !== currentSession) return;
+// ── Node connection ───────────────────────────────────────────
+function connectNode(url, name) {
+  if (socket) { socket.disconnect(); socket = null; }
+  currentNodeUrl  = url;
+  currentNodeName = name;
+  currentSession  = null;
+  allSessions     = [];
+  setDot('err');
+  document.getElementById('node-label').textContent    = name.toUpperCase();
+  document.getElementById('session-label').textContent = 'CONNECTING…';
   term.clear();
-  term.write(data);
-});
+  term.write(`\r\n\x1b[36m  Connecting to ${name} — ${url}\x1b[0m\r\n`);
 
-socket.on("joined", id => {
-  currentSession = id;
-  const s = allSessions.find(s => s.id === id);
-  document.getElementById("session-name").textContent = s ? s.name.toUpperCase() : id;
-  document.getElementById("no-session").classList.remove("show");
-  fitAndResize();
-});
+  socket = io(url, { transports: ['websocket','polling'], reconnection: true, reconnectionDelay: 2000 });
 
-socket.on("output", ({ id, data }) => {
-  if (id === currentSession) term.write(data);
-});
+  socket.on('connect',    () => { setDot('on');  document.getElementById('session-label').textContent = 'CONNECTED'; });
+  socket.on('disconnect', () => { setDot('err'); document.getElementById('session-label').textContent = 'DISCONNECTED'; });
 
-socket.on("err", msg => {
-  term.write(`\r\n\x1b[31m[error] ${msg}\x1b[0m\r\n`);
-});
+  socket.on('sessions', list => {
+    allSessions = list;
+    renderSessions();
+    if (currentSession && list.find(s => s.id === currentSession)) {
+      socket.emit('join', currentSession);
+    }
+  });
+  socket.on('created',  id  => socket.emit('join', id));
+  socket.on('replay',   ({ id, data }) => { if (id === currentSession) { term.clear(); term.write(data); } });
+  socket.on('joined',   id  => {
+    currentSession = id;
+    const s = allSessions.find(s => s.id === id);
+    document.getElementById('session-label').textContent = s ? s.name.toUpperCase() : id;
+    document.getElementById('no-session').classList.remove('show');
+    fitAndResize();
+  });
+  socket.on('output',   ({ id, data }) => { if (id === currentSession) term.write(data); });
+  socket.on('err',      msg => term.write(`\r\n\x1b[31m[error] ${msg}\x1b[0m\r\n`));
 
-// ── Terminal input ───────────────────────────────────────────
-term.onData(data => {
-  if (currentSession) socket.emit("input", { id: currentSession, data });
-});
+  // Keyboard input
+  term.onData(data => { if (socket && currentSession) socket.emit('input', { id: currentSession, data }); });
 
-// ── Resize ───────────────────────────────────────────────────
+  renderNodes();
+  closeAllPanels();
+  document.getElementById('no-session').classList.add('show');
+}
+
+// ── Resize ────────────────────────────────────────────────────
 function fitAndResize() {
   fitAddon.fit();
-  if (currentSession) socket.emit("resize", { id: currentSession, cols: term.cols, rows: term.rows });
+  if (socket && currentSession) socket.emit('resize', { id: currentSession, cols: term.cols, rows: term.rows });
 }
-const ro = new ResizeObserver(() => fitAndResize());
-ro.observe(document.getElementById("terminal-wrap"));
-window.addEventListener("resize", fitAndResize);
+new ResizeObserver(fitAndResize).observe(document.getElementById('terminal-wrap'));
+window.addEventListener('resize', fitAndResize);
 
-// ── Sessions UI ──────────────────────────────────────────────
-function renderSessions() {
-  const list = document.getElementById("session-list");
-  if (!allSessions.length) {
-    list.innerHTML = `<p style="font-size:10px;color:#2a4858;text-align:center;padding:12px 0">No active sessions</p>`;
+// ── Nodes UI ──────────────────────────────────────────────────
+function renderNodes() {
+  const nodes = loadNodes();
+  const el    = document.getElementById('node-list');
+  if (!nodes.length) {
+    el.innerHTML = `<p style="font-size:10px;color:#2a4858;text-align:center;padding:12px 0">No nodes configured. Add one below.</p>`;
     return;
   }
-  list.innerHTML = allSessions.map(s => `
-    <div class="session-item ${s.id === currentSession ? "active" : ""}" data-id="${s.id}">
-      <div class="session-dot"></div>
-      <div class="session-name">${s.name}</div>
-      <div class="session-cwd">${s.cwd.split("/").slice(-2).join("/")}</div>
-      <button class="session-kill" data-kill="${s.id}">✕</button>
+  el.innerHTML = nodes.map((n, i) => `
+    <div class="node-item ${n.url === currentNodeUrl ? 'active' : ''}">
+      <div class="node-dot ${n.url === currentNodeUrl ? 'on' : ''}"></div>
+      <div class="node-info">
+        <div class="node-name">${n.name}</div>
+        <div class="node-url">${n.url}</div>
+      </div>
+      <button class="node-connect" data-idx="${i}">CONNECT</button>
+      <button class="node-del" data-del="${i}">✕</button>
     </div>
-  `).join("");
+  `).join('');
 
-  list.querySelectorAll(".session-item").forEach(el => {
-    el.addEventListener("click", e => {
-      if (e.target.dataset.kill) return;
-      socket.emit("join", el.dataset.id);
-      closePanel();
+  el.querySelectorAll('.node-connect').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const n = nodes[+btn.dataset.idx];
+      connectNode(n.url, n.name);
     });
   });
-  list.querySelectorAll(".session-kill").forEach(btn => {
-    btn.addEventListener("click", e => {
+  el.querySelectorAll('.node-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const nodes2 = loadNodes();
+      nodes2.splice(+btn.dataset.del, 1);
+      saveNodes(nodes2);
+      renderNodes();
+    });
+  });
+}
+
+document.getElementById('add-node-btn').addEventListener('click', () => {
+  const name = document.getElementById('add-node-name').value.trim();
+  const url  = document.getElementById('add-node-url').value.trim();
+  if (!name || !url) return;
+  const nodes = loadNodes();
+  nodes.push({ name, url: url.replace(/\/$/, '') });
+  saveNodes(nodes);
+  document.getElementById('add-node-name').value = '';
+  document.getElementById('add-node-url').value  = '';
+  renderNodes();
+  // Auto-connect first node added
+  if (nodes.length === 1) connectNode(nodes[0].url, nodes[0].name);
+});
+
+// ── Sessions UI ───────────────────────────────────────────────
+function renderSessions() {
+  const el = document.getElementById('session-list');
+  if (!allSessions.length) {
+    el.innerHTML = `<p style="font-size:10px;color:#2a4858;text-align:center;padding:12px 0">No active sessions</p>`;
+    return;
+  }
+  el.innerHTML = allSessions.map(s => `
+    <div class="session-item ${s.id === currentSession ? 'active' : ''}" data-id="${s.id}">
+      <div class="sdot"></div>
+      <div class="sname">${s.name}</div>
+      <div class="scwd">${s.cwd.split('/').slice(-2).join('/')}</div>
+      <button class="skill" data-kill="${s.id}">✕</button>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.session-item').forEach(el2 => {
+    el2.addEventListener('click', e => {
+      if (e.target.dataset.kill) return;
+      if (socket) socket.emit('join', el2.dataset.id);
+      closeAllPanels();
+    });
+  });
+  el.querySelectorAll('.skill').forEach(btn => {
+    btn.addEventListener('click', e => {
       e.stopPropagation();
       if (btn.dataset.kill === currentSession) currentSession = null;
-      socket.emit("kill", btn.dataset.kill);
+      if (socket) socket.emit('kill', btn.dataset.kill);
     });
   });
 }
 
-function openPanel()  { document.getElementById("sessions-overlay").classList.add("open"); }
-function closePanel() { document.getElementById("sessions-overlay").classList.remove("open"); }
-
-document.getElementById("btn-sessions").addEventListener("click", openPanel);
-document.getElementById("close-sessions").addEventListener("click", closePanel);
-document.getElementById("sessions-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("sessions-overlay")) closePanel();
-});
-
 function startNewSession() {
-  const name = document.getElementById("new-session-name").value.trim() || null;
-  socket.emit("new_session", { name, cwd: null });
-  document.getElementById("new-session-name").value = "";
-  closePanel();
+  if (!socket) return;
+  const name = document.getElementById('new-sess-name').value.trim() || null;
+  socket.emit('new_session', { name, cwd: null });
+  document.getElementById('new-sess-name').value = '';
+  closeAllPanels();
 }
 
-document.getElementById("new-session-btn").addEventListener("click", startNewSession);
-document.getElementById("new-session-name").addEventListener("keydown", e => {
-  if (e.key === "Enter") startNewSession();
-});
-document.getElementById("btn-new").addEventListener("click", () => {
-  socket.emit("new_session", { name: null, cwd: null });
-});
-document.getElementById("btn-start-first").addEventListener("click", () => {
-  socket.emit("new_session", { name: "Claude", cwd: null });
-});
+// ── Panel open/close ──────────────────────────────────────────
+function closeAllPanels() {
+  document.getElementById('nodes-overlay').classList.remove('open');
+  document.getElementById('sessions-overlay').classList.remove('open');
+}
+document.getElementById('btn-nodes').addEventListener('click',    () => { renderNodes(); document.getElementById('nodes-overlay').classList.add('open'); });
+document.getElementById('btn-sessions').addEventListener('click', () => { renderSessions(); document.getElementById('sessions-overlay').classList.add('open'); });
+document.getElementById('btn-new').addEventListener('click',      () => { if (socket) socket.emit('new_session', { name: null, cwd: null }); });
+document.getElementById('btn-open-nodes').addEventListener('click', () => { renderNodes(); document.getElementById('nodes-overlay').classList.add('open'); });
+document.getElementById('close-nodes').addEventListener('click',    closeAllPanels);
+document.getElementById('close-sessions').addEventListener('click', closeAllPanels);
+document.getElementById('new-sess-btn').addEventListener('click',   startNewSession);
+document.getElementById('new-sess-name').addEventListener('keydown', e => { if (e.key === 'Enter') startNewSession(); });
+document.getElementById('nodes-overlay').addEventListener('click',    e => { if (e.target === document.getElementById('nodes-overlay'))    closeAllPanels(); });
+document.getElementById('sessions-overlay').addEventListener('click', e => { if (e.target === document.getElementById('sessions-overlay')) closeAllPanels(); });
 
-// ── Button bars ──────────────────────────────────────────────
-document.querySelectorAll("[data-send]").forEach(btn => {
-  btn.addEventListener("pointerdown", e => {
+// ── Button bars ───────────────────────────────────────────────
+document.querySelectorAll('[data-send]').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
     e.preventDefault();
-    if (currentSession) socket.emit("input", { id: currentSession, data: btn.dataset.send });
+    const raw = btn.dataset.send.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+    if (socket && currentSession) socket.emit('input', { id: currentSession, data: raw });
+    term.focus();
+  });
+});
+document.querySelectorAll('[data-ctrl]').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (!socket || !currentSession) return;
+    const map = { c:'\x03', d:'\x04', tab:'\t', esc:'\x1b' };
+    socket.emit('input', { id: currentSession, data: map[btn.dataset.ctrl] || '' });
+    term.focus();
+  });
+});
+document.querySelectorAll('[data-esc]').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (!socket || !currentSession) return;
+    const map = { up:'\x1b[A', down:'\x1b[B', left:'\x1b[D', right:'\x1b[C' };
+    socket.emit('input', { id: currentSession, data: map[btn.dataset.esc] || '' });
     term.focus();
   });
 });
 
-// ── Helpers ──────────────────────────────────────────────────
-function setDot(state) {
-  const d = document.getElementById("status-dot");
-  d.className = state;
-}
+// ── Helpers ───────────────────────────────────────────────────
+function setDot(state) { document.getElementById('status-dot').className = state; }
+document.getElementById('terminal-wrap').addEventListener('click', () => term.focus());
 
-// ── PWA service worker ───────────────────────────────────────
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
+// ── Auto-connect last used node ───────────────────────────────
+const nodes = loadNodes();
+const lastUrl = localStorage.getItem('claude_last_node');
+if (lastUrl) {
+  const n = nodes.find(n => n.url === lastUrl);
+  if (n) connectNode(n.url, n.name);
 }
+// Add this origin as a node automatically on first load
+if (!nodes.length && location.hostname !== 'localhost') {
+  const selfUrl  = `${location.protocol}//${location.hostname}:${location.port || 3000}`;
+  const selfName = 'This Device';
+  nodes.push({ name: selfName, url: selfUrl });
+  saveNodes(nodes);
+  connectNode(selfUrl, selfName);
+}
+// Save last connected node
+window._origConnect = connectNode;
+connectNode = (url, name) => {
+  localStorage.setItem('claude_last_node', url);
+  window._origConnect(url, name);
+};
 
-// Focus terminal on tap
-document.getElementById("terminal-wrap").addEventListener("click", () => term.focus());
+// ── PWA ───────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script>
 </body>
 </html>
