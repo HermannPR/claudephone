@@ -173,6 +173,15 @@
       border:1px solid var(--border); color:var(--muted); font-family:inherit;
       font-size:10px; padding:8px; border-radius:4px; cursor:pointer; letter-spacing:.1em;
     }
+    .setup-step {
+      background:#080e16; border:1px solid var(--border); border-radius:6px;
+      padding:12px; margin-bottom:10px; cursor:pointer; position:relative;
+      transition:border-color .2s;
+    }
+    .setup-step:active { border-color:var(--accent); }
+    .setup-step .label { font-size:9px; color:var(--muted); letter-spacing:.15em; margin-bottom:6px; }
+    .setup-step pre { font-size:11px; color:#9ab8c8; white-space:pre-wrap; word-break:break-all; margin:0; line-height:1.5; }
+    .setup-step .copied { font-size:9px; color:var(--green); position:absolute; top:8px; right:10px; display:none; }
   </style>
 </head>
 <body>
@@ -185,6 +194,7 @@
     <span id="session-label">NO SESSION</span>
     <button class="hbtn accent" id="btn-nodes">NODES</button>
     <button class="hbtn" id="btn-sessions">SESS</button>
+    <button class="hbtn" id="btn-setup">SETUP</button>
     <button class="hbtn" id="btn-new">+</button>
   </div>
 
@@ -231,6 +241,57 @@
       <button id="add-node-btn">ADD NODE</button>
     </div>
     <button class="close-btn" id="close-nodes">CLOSE</button>
+  </div>
+</div>
+
+<!-- Setup overlay -->
+<div id="setup-overlay" class="overlay">
+  <div class="panel">
+    <h2>— NEW DEVICE SETUP —</h2>
+    <p style="font-size:10px;color:#2a4858;margin-bottom:14px;text-align:center">Tap any block to copy → paste in Termux</p>
+
+    <div class="setup-step">
+      <div class="label">FIX MIRRORS (if pkg fails)</div>
+      <pre id="s0">echo 'deb https://packages-cf.termux.dev/apt/termux-main stable main' > $PREFIX/etc/apt/sources.list && pkg update -y</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">INSTALL DEPENDENCIES</div>
+      <pre id="s1">pkg install -y nodejs npm git python make clang openssh</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">SET API KEY (replace YOUR_KEY)</div>
+      <pre id="s2">echo 'export ANTHROPIC_API_KEY=YOUR_KEY' >> ~/.bashrc && source ~/.bashrc</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">CLONE + INSTALL</div>
+      <pre id="s3">cd ~ && git clone https://github.com/HermannPR/claudephone.git && cd claudephone && npm install</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">START SSH + SET PASSWORD</div>
+      <pre id="s4">sshd && passwd</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">GET YOUR IPs</div>
+      <pre id="s5">ip addr show wlan0 | grep 'inet ' ; ip addr show tailscale0 2>/dev/null | grep 'inet '</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">AUTO-START ON BOOT</div>
+      <pre id="s6">mkdir -p ~/.termux/boot && printf '#!/data/data/com.termux/files/usr/bin/bash\nsource ~/.bashrc\ntermux-wake-lock\ncd ~/claudephone\nnode server.js >> ~/claudephone/server.log 2>&1 &\n' > ~/.termux/boot/claude.sh && chmod +x ~/.termux/boot/claude.sh</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+    <div class="setup-step">
+      <div class="label">START SERVER NOW</div>
+      <pre id="s7">cd ~/claudephone && npm start</pre>
+      <span class="copied">✓ COPIED</span>
+    </div>
+
+    <button class="close-btn" id="close-setup">CLOSE</button>
   </div>
 </div>
 
@@ -497,6 +558,34 @@ connectNode = (url, name) => {
   localStorage.setItem('claude_last_node', url);
   window._origConnect(url, name);
 };
+
+// ── Setup panel ───────────────────────────────────────────────
+document.getElementById('btn-setup').addEventListener('click', () => {
+  document.getElementById('setup-overlay').classList.add('open');
+});
+document.getElementById('close-setup').addEventListener('click', closeAllPanels);
+document.getElementById('setup-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('setup-overlay')) closeAllPanels();
+});
+document.querySelectorAll('.setup-step').forEach(el => {
+  el.addEventListener('click', () => {
+    const text = el.querySelector('pre').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const c = el.querySelector('.copied');
+      c.style.display = 'block';
+      setTimeout(() => c.style.display = 'none', 1500);
+    }).catch(() => {
+      // fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      const c = el.querySelector('.copied');
+      c.style.display = 'block';
+      setTimeout(() => c.style.display = 'none', 1500);
+    });
+  });
+});
 
 // ── PWA ───────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
