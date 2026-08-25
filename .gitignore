@@ -1,3 +1,10 @@
 node_modules/
+dist/
+.next/
+build/
 .env
+.env.local
+.env.*.local
+!.env.example
 *.log
+__pycache__/
