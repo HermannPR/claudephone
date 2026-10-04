@@ -1,60 +1,42 @@
-# claude-phone
+# claudephone
 
-Mobile-first web client that wraps Claude Code sessions over a PTY — run Claude Code on a phone (Termux) or a Raspberry Pi, and drive it from any phone/tablet browser over LAN or Tailscale.
+Cliente web para usar Claude Code desde el celular. Corre un servidor en un teléfono con Termux o en una Raspberry Pi, y desde el navegador de cualquier celular o tableta controlas las sesiones por WiFi o Tailscale. Es para quien quiere programar con Claude Code sin estar frente a una computadora.
 
-## What it does
-
-- Spawns real PTY sessions via `node-pty` that auto-launch `claude`, with per-session output buffers, replay for clients that join late, terminal resize, and session create/join/kill via Socket.IO events.
-- Multi-node "Claude Network": one PWA client stores nodes (name + URL) in localStorage and connects to any of them — e.g. a Poco X3 Pro phone, a Pi 3, or a second phone.
-- PWA client (`public/`) built on xterm.js with a mobile-first dark UI; installable via `manifest.json` + service worker (network-first).
-- Device onboarding helpers: QR-based SSH setup and a tap-to-copy page of Termux commands.
-
-## Architecture
-
-| File | Role |
+| Móvil | Panel de configuración de un equipo nuevo |
 | --- | --- |
-| `server.js` | Express + Socket.IO + node-pty. Sessions map, events `new_session` / `join` / `input` / `resize` / `kill`; writes `claude` to the PTY 600 ms after spawn. Listens on `0.0.0.0:3000` (`PORT` env). |
-| `public/` | PWA client: `index.html` (xterm.js + socket.io-client from CDN, node list in localStorage, SETUP panel with tap-to-copy commands), `manifest.json`, `sw.js`. |
-| `install.sh` | Termux (Android) setup: packages, clone, `npm install`, save `ANTHROPIC_API_KEY` to `~/.bashrc`, Termux:Boot autostart. |
-| `setup-ssh.sh` | Termux SSH setup: installs openssh, starts `sshd` on port 8022, prints `SSH_USER` / `SSH_PORT` / IPs to paste to Claude, autostarts SSH on boot. |
-| `serve-qr.js` | Windows helper: serves `setup-ssh.sh` on port 9998 with a QR code the phone scans. |
-| `serve-cmd.js` | Serves a tap-to-copy page of Termux commands on port 9997 with QR. |
+| ![Vista móvil](docs/capturas/movil.jpg) | ![Panel SETUP](docs/capturas/escritorio-setup.jpg) |
 
-## Install and run
+## Qué hace
 
-Server side (any node; `node-pty` compiles natively, so Node, `python`, `make` and `clang` must be present):
+- Abre sesiones reales con `node-pty` que lanzan `claude` solos. Cada sesión guarda su salida, así que quien se conecta tarde ve lo anterior.
+- Permite crear, unirse, redimensionar y cerrar sesiones por eventos de Socket.IO.
+- Red de nodos: un solo cliente guarda varios equipos (nombre y URL) y se conecta a cualquiera, por ejemplo un teléfono o una Raspberry Pi.
+- Cliente PWA con xterm.js, instalable, con botones rápidos (YES, NO, STOP, flechas, Ctrl+C) pensados para pantalla táctil.
+- Ayudas para configurar un equipo nuevo: SSH con código QR y una página con comandos de Termux para copiar con un toque.
+
+## Tecnologías
+
+Node.js, Express, Socket.IO, node-pty, xterm.js, PWA (manifest y service worker), shell scripts.
+
+## Cómo correrlo
+
+`node-pty` se compila al instalar, así que necesitas Node, `python`, `make` y un compilador de C.
 
 ```bash
 npm install
-npm start            # → http://localhost:3000  (and on the LAN IP)
+npm start
 ```
 
-Environment variables (see `.env.example`): `ANTHROPIC_API_KEY` (picked up by the spawned `claude`), `PORT` (default 3000).
+Abre `http://localhost:3000` o la IP de tu red local. Variables de entorno (ver `.env.example`): `ANTHROPIC_API_KEY` para el `claude` que se lanza y `PORT` (por defecto 3000).
 
-**On the phone (Termux):** run `bash install.sh`, then `npm start` and open `http://<ip>:3000`. For SSH access from the PC: run `bash setup-ssh.sh` and paste the printed connection info to Claude.
+En el teléfono con Termux ejecuta `bash install.sh`, luego `npm start` y abre `http://<ip>:3000`.
 
-## QR pairing flow
+## Emparejar un teléfono por QR
 
-1. On the PC (same WiFi): `node serve-qr.js` — prints a QR code pointing to the hosted `setup-ssh.sh`.
-2. Scan it with the phone camera → open in Termux browser, or in Termux run `curl <url> | bash` — this sets up SSH (port 8022) and prints the IPs and credentials.
-3. Paste the `SSH_USER` / `SSH_PORT` / IP values to Claude on the PC so it can reach the phone.
-4. Start the server on the phone and open the PWA: add the node (name + `http://<ip>:3000`) and connect. Repeat per node to build the network.
+1. En la PC, en la misma red WiFi, ejecuta `node serve-qr.js`. Muestra un QR que apunta a `setup-ssh.sh`.
+2. Escanéalo con el teléfono y corre el script en Termux. Configura SSH en el puerto 8022 e imprime las IPs.
+3. Inicia el servidor en el teléfono y agrega el nodo (nombre y `http://<ip>:3000`) desde la app.
 
-## Project structure
+## Estado
 
-```
-claude-phone/
-├── server.js · serve-qr.js · serve-cmd.js
-├── install.sh · setup-ssh.sh
-├── public/                 # PWA client (index.html, manifest.json, sw.js)
-├── .env.example
-└── package.json            # express (^4.18.2), socket.io, node-pty, qrcode-terminal
-```
-
-## Status
-
-Working v1 prototype over LAN or Tailscale mesh. Sessions live in memory only (no persistence, no auth); intended for a personal trusted network.
-## Screenshots
-
-![Main view](docs/screenshot.png)
-
+Prototipo funcional. Las sesiones viven solo en memoria y no hay autenticación, así que está pensado para una red personal de confianza.
